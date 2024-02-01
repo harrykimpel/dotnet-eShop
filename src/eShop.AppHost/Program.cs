@@ -14,45 +14,83 @@ var identityDb = postgres.AddDatabase("IdentityDB");
 var orderDb = postgres.AddDatabase("OrderingDB");
 var webhooksDb = postgres.AddDatabase("WebHooksDB");
 
+var NEW_RELIC_REGION = Environment.GetEnvironmentVariable("NEW_RELIC_REGION");
+string OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.nr-data.net";
+if (NEW_RELIC_REGION != null &&
+    NEW_RELIC_REGION != "" &&
+    NEW_RELIC_REGION == "EU")
+{
+    OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.eu01.nr-data.net";
+}
+var NEW_RELIC_LICENSE_KEY = Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY");
+string OTEL_EXPORTER_OTLP_HEADERS = "api-key=" + NEW_RELIC_LICENSE_KEY;
+
 // Services
 var identityApi = builder.AddProject<Projects.Identity_API>("identity-api")
-    .WithReference(identityDb);
+    .WithReference(identityDb)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "identity-api");
 
 var basketApi = builder.AddProject<Projects.Basket_API>("basket-api")
     .WithReference(redis)
     .WithReference(rabbitMq)
-    .WithEnvironment("Identity__Url", identityApi.GetEndpoint("http"));
+    .WithEnvironment("Identity__Url", identityApi.GetEndpoint("http"))
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "basket-api");
 
 var catalogApi = builder.AddProject<Projects.Catalog_API>("catalog-api")
     .WithReference(rabbitMq)
-    .WithReference(catalogDb);
+    .WithReference(catalogDb)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "catalog-api");
 
 var orderingApi = builder.AddProject<Projects.Ordering_API>("ordering-api")
     .WithReference(rabbitMq)
     .WithReference(orderDb)
-    .WithEnvironment("Identity__Url", identityApi.GetEndpoint("http"));
+    .WithEnvironment("Identity__Url", identityApi.GetEndpoint("http"))
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "ordering-api");
 
 builder.AddProject<Projects.OrderProcessor>("order-processor")
     .WithReference(rabbitMq)
-    .WithReference(orderDb);
+    .WithReference(orderDb)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "order-processor");
 
 builder.AddProject<Projects.PaymentProcessor>("payment-processor")
-    .WithReference(rabbitMq);
+    .WithReference(rabbitMq)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "payment-processor");
 
 var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")
     .WithReference(rabbitMq)
     .WithReference(webhooksDb)
-    .WithEnvironment("Identity__Url", identityApi.GetEndpoint("http"));
+    .WithEnvironment("Identity__Url", identityApi.GetEndpoint("http"))
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "webhooks-api");
 
 // Reverse proxies
 builder.AddProject<Projects.Mobile_Bff_Shopping>("mobile-bff")
     .WithReference(catalogApi)
-    .WithReference(identityApi);
+    .WithReference(identityApi)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "mobile-bff");
 
 // Apps
 var webhooksClient = builder.AddProject<Projects.WebhookClient>("webhooksclient")
     .WithReference(webHooksApi)
-    .WithEnvironment("IdentityUrl", identityApi.GetEndpoint("http"));
+    .WithEnvironment("IdentityUrl", identityApi.GetEndpoint("http"))
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "webhooksclient");
 
 var webApp = builder.AddProject<Projects.WebApp>("webapp")
     .WithReference(basketApi)
@@ -60,7 +98,10 @@ var webApp = builder.AddProject<Projects.WebApp>("webapp")
     .WithReference(orderingApi)
     .WithReference(rabbitMq)
     .WithEnvironment("IdentityUrl", identityApi.GetEndpoint("http"))
-    .WithLaunchProfile("https");
+    .WithLaunchProfile("https")
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "webapp");
 
 // Wire up the callback urls (self referencing)
 webApp.WithEnvironment("CallBackUrl", webApp.GetEndpoint("https"));

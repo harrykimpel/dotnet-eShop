@@ -24,6 +24,12 @@ dotnet restore eShop.Web.slnf
 ```
 - Install & start Docker Desktop:  https://docs.docker.com/engine/install/
 
+- Configure your New Relic region and license key
+```powershell
+export NEW_RELIC_REGION=(US|EU)
+export NEW_RELIC_LICENSE_KEY=MY_NEW_RELIC_LICENSE_KEY
+```
+
 ### Running the solution
 
 > [!WARNING]

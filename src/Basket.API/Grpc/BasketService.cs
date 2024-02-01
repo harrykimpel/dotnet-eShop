@@ -3,6 +3,9 @@ using eShop.Basket.API.Repositories;
 using eShop.Basket.API.Extensions;
 using eShop.Basket.API.Model;
 
+using OpenTelemetry.Trace;
+using GrpcCore = Grpc.Core;
+
 namespace eShop.Basket.API.Grpc;
 
 public class BasketService(
@@ -69,10 +72,10 @@ public class BasketService(
     }
 
     [DoesNotReturn]
-    private static void ThrowNotAuthenticated() => throw new RpcException(new Status(StatusCode.Unauthenticated, "The caller is not authenticated."));
+    private static void ThrowNotAuthenticated() => throw new RpcException(new GrpcCore.Status(GrpcCore.StatusCode.Unauthenticated, "The caller is not authenticated."));
 
     [DoesNotReturn]
-    private static void ThrowBasketDoesNotExist(string userId) => throw new RpcException(new Status(StatusCode.NotFound, $"Basket with buyer id {userId} does not exist"));
+    private static void ThrowBasketDoesNotExist(string userId) => throw new RpcException(new GrpcCore.Status(GrpcCore.StatusCode.NotFound, $"Basket with buyer id {userId} does not exist"));
 
     private static CustomerBasketResponse MapToCustomerBasketResponse(CustomerBasket customerBasket)
     {
@@ -97,6 +100,8 @@ public class BasketService(
             BuyerId = userId
         };
 
+        var span = Tracer.CurrentSpan;
+
         foreach (var item in customerBasketRequest.Items)
         {
             response.Items.Add(new()
@@ -104,6 +109,9 @@ public class BasketService(
                 ProductId = item.ProductId,
                 Quantity = item.Quantity,
             });
+
+            span.SetAttribute("ProductId", item.ProductId);
+            span.SetAttribute("Quantity", item.Quantity);
         }
 
         return response;
