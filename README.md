@@ -60,3 +60,15 @@ For more information on contributing to this repo, please read [the contribution
 ### eShop on Azure
 
 For a version of this app configured for deployment on Azure, please view [the eShop on Azure](https://github.com/Azure-Samples/eShopOnAzure) repo.
+
+## New Relic observability platform
+
+When sending the telemetry to New relic observability platform, you can nicely observe the entire eShop application.
+
+One way to look at the data is by using New Relic's service map:
+
+![New Relic service map](./img/newrelic-eshop-service-map.png)
+
+... or by visualizing the distributed traces:
+
+![New Relic distributed tracing](./img/newrelic-eshop-distributed-tracing.png)
