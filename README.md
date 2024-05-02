@@ -41,10 +41,13 @@ export NEW_RELIC_LICENSE_KEY=MY_NEW_RELIC_LICENSE_KEY
  - Hit Ctrl-F5 to launch Aspire
 
 * Or run the application from your terminal:
+
 ```powershell
 dotnet run --project src/eShop.AppHost/eShop.AppHost.csproj
 ```
+
 then look for lines like this in the console output in order to find the URL to open the Aspire dashboard:
+
 ```sh
 Now listening on: http://localhost:18848
 ```
