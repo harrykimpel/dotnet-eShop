@@ -1,5 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 using eShop.Basket.API.Model;
+using System.Diagnostics;
 
 namespace eShop.Basket.API.Repositories;
 
@@ -42,7 +43,10 @@ public class RedisBasketRepository(ILogger<RedisBasketRepository> logger, IConne
             return null;
         }
 
-
+        logger.LogInformation("basket # items: " + basket.Items.Count);
+        logger.LogInformation("basket: " + basket.Items[basket.Items.Count-1].ProductId);
+        var activity = Activity.Current;
+        activity?.SetTag("productId", basket.Items[basket.Items.Count-1].ProductId);
         logger.LogInformation("Basket item persisted successfully.");
         return await GetBasketAsync(basket.BuyerId);
     }
