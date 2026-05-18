@@ -8,6 +8,11 @@ A reference .NET application implementing an e-commerce website using a services
 
 ## Getting Started
 
+This version of eShop is based on .NET 9. 
+
+Previous eShop versions:
+* [.NET 8](https://github.com/dotnet/eShop/tree/release/8.0)
+
 ### Prerequisites
 
 - Clone the eShop repository: https://github.com/dotnet/eshop
@@ -20,13 +25,32 @@ A reference .NET application implementing an e-commerce website using a services
     - `.NET Aspire SDK` component in `Individual components`.
     - Optional: `.NET Multi-platform App UI development` to run client apps
 
-#### Mac, Linux, & Windows without Visual Studio
-- Install the latest [.NET 8 SDK](https://dot.net/download?cid=eshop)
-- Install the [.NET Aspire workload](https://learn.microsoft.com/dotnet/aspire/fundamentals/setup-tooling?tabs=dotnet-cli%2Cunix#install-net-aspire) with the following commands:
+Or
+
+- Run the following commands in a Powershell & Terminal running as `Administrator` to automatically configure your environment with the required tools to build and run this application. (Note: A restart is required and included in the script below.)
+
 ```powershell
-dotnet workload update
-dotnet workload install aspire
-dotnet restore eShop.Web.slnf
+install-Module -Name Microsoft.WinGet.Configuration -AllowPrerelease -AcceptLicense -Force
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+get-WinGetConfiguration -file .\.configurations\vside.dsc.yaml | Invoke-WinGetConfiguration -AcceptConfigurationAgreements
+```
+
+Or
+
+- From Dev Home go to `Machine Configuration -> Clone repositories`. Enter the URL for this repository. In the confirmation screen look for the section `Configuration File Detected` and click `Run File`.
+
+#### Mac, Linux, & Windows without Visual Studio
+- Install the latest [.NET 9 SDK](https://dot.net/download?cid=eshop)
+
+Or
+
+- Run the following commands in a Powershell & Terminal running as `Administrator` to automatically configuration your environment with the required tools to build and run this application. (Note: A restart is required after running the script below.)
+
+##### Install Visual Studio Code and related extensions
+```powershell
+install-Module -Name Microsoft.WinGet.Configuration -AllowPrerelease -AcceptLicense  -Force
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+get-WinGetConfiguration -file .\.configurations\vscode.dsc.yaml | Invoke-WinGetConfiguration -AcceptConfigurationAgreements
 ```
 
 > Note: These commands may require `sudo`

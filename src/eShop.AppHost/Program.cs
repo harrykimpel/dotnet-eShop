@@ -1,15 +1,16 @@
 ﻿using eShop.AppHost;
-using Microsoft.Extensions.Configuration;
 
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddForwardedHeaders();
 
 var redis = builder.AddRedis("redis");
-var rabbitMq = builder.AddRabbitMQ("eventbus");
+var rabbitMq = builder.AddRabbitMQ("eventbus")
+    .WithLifetime(ContainerLifetime.Persistent);
 var postgres = builder.AddPostgres("postgres")
     .WithImage("ankane/pgvector")
-    .WithImageTag("latest");
+    .WithImageTag("latest")
+    .WithLifetime(ContainerLifetime.Persistent);
 
 var catalogDb = postgres.AddDatabase("catalogdb");
 var identityDb = postgres.AddDatabase("identitydb");
@@ -34,51 +35,36 @@ string OTEL_EXPORTER_OTLP_HEADERS = "api-key=" + NEW_RELIC_LICENSE_KEY;
 var identityApi = builder.AddProject<Projects.Identity_API>("identity-api", launchProfileName)
     .WithExternalHttpEndpoints()
     .WithReference(identityDb)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "identity-api");
+    .WithHttpHealthCheck("/health");
 
 var identityEndpoint = identityApi.GetEndpoint(launchProfileName);
 
 var basketApi = builder.AddProject<Projects.Basket_API>("basket-api")
     .WithReference(redis)
-    .WithReference(rabbitMq)
-    .WithEnvironment("Identity__Url", identityEndpoint)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "basket-api");
-
+    .WithReference(rabbitMq).WaitFor(rabbitMq)
+    .WithEnvironment("Identity__Url", identityEndpoint);
+redis.WithParentRelationship(basketApi);
 
 var catalogApi = builder.AddProject<Projects.Catalog_API>("catalog-api")
-    .WithReference(rabbitMq)
-    .WithReference(catalogDb)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "catalog-api");
+    .WithReference(rabbitMq).WaitFor(rabbitMq)
+    .WithReference(catalogDb);
 
 var orderingApi = builder.AddProject<Projects.Ordering_API>("ordering-api")
-    .WithReference(rabbitMq)
-    .WithReference(orderDb)
-    .WithEnvironment("Identity__Url", identityEndpoint)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "ordering-api");
+    .WithReference(rabbitMq).WaitFor(rabbitMq)
+    .WithReference(orderDb).WaitFor(orderDb)
+    .WithHttpHealthCheck("/health")
+    .WithEnvironment("Identity__Url", identityEndpoint);
 
 builder.AddProject<Projects.OrderProcessor>("order-processor")
-    .WithReference(rabbitMq)
+    .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WithReference(orderDb)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "order-processor");
-
+    .WaitFor(orderingApi); // wait for the orderingApi to be ready because that contains the EF migrations
 
 builder.AddProject<Projects.PaymentProcessor>("payment-processor")
-    .WithReference(rabbitMq)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "payment-processor");
+    .WithReference(rabbitMq).WaitFor(rabbitMq);
 
 var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")
-    .WithReference(rabbitMq)
+    .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WithReference(webhooksDb)
     .WithEnvironment("Identity__Url", identityEndpoint)
     .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
@@ -86,14 +72,9 @@ var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")
     .WithEnvironment("OTEL_SERVICE_NAME", "webhooks-api");
 
 // Reverse proxies
-builder.AddProject<Projects.Mobile_Bff_Shopping>("mobile-bff")
-    .WithReference(catalogApi)
-    .WithReference(orderingApi)
-    .WithReference(basketApi)
-    .WithReference(identityApi)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "mobile-bff");
+builder.AddYarp("mobile-bff")
+    .WithExternalHttpEndpoints()
+    .ConfigureMobileBffRoutes(catalogApi, orderingApi, identityApi);
 
 // Apps
 var webhooksClient = builder.AddProject<Projects.WebhookClient>("webhooksclient", launchProfileName)
@@ -105,53 +86,25 @@ var webhooksClient = builder.AddProject<Projects.WebhookClient>("webhooksclient"
 
 var webApp = builder.AddProject<Projects.WebApp>("webapp", launchProfileName)
     .WithExternalHttpEndpoints()
+    .WithUrls(c => c.Urls.ForEach(u => u.DisplayText = $"Online Store ({u.Endpoint?.EndpointName})"))
     .WithReference(basketApi)
     .WithReference(catalogApi)
     .WithReference(orderingApi)
-    .WithReference(rabbitMq)
-    .WithEnvironment("IdentityUrl", identityEndpoint)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "webapp");
+    .WithReference(rabbitMq).WaitFor(rabbitMq)
+    .WaitFor(identityApi)
+    .WithEnvironment("IdentityUrl", identityEndpoint);
 
 // set to true if you want to use OpenAI
 bool useOpenAI = false;
 if (useOpenAI)
 {
-    const string openAIName = "openai";
-    const string textEmbeddingName = "text-embedding-3-small";
-    const string chatModelName = "gpt-35-turbo-16k";
+    builder.AddOpenAI(catalogApi, webApp, OpenAITarget.OpenAI); // set to AzureOpenAI if you want to use Azure OpenAI
+}
 
-    // to use an existing OpenAI resource, add the following to the AppHost user secrets:
-    // "ConnectionStrings": {
-    //   "openai": "Key=<API Key>" (to use https://api.openai.com/)
-    //     -or-
-    //   "openai": "Endpoint=https://<name>.openai.azure.com/" (to use Azure OpenAI)
-    // }
-    IResourceBuilder<IResourceWithConnectionString> openAI;
-    if (builder.Configuration.GetConnectionString(openAIName) is not null)
-    {
-        openAI = builder.AddConnectionString(openAIName);
-    }
-    else
-    {
-        // to use Azure provisioning, add the following to the AppHost user secrets:
-        // "Azure": {
-        //   "SubscriptionId": "<your subscription ID>"
-        //   "Location": "<location>"
-        // }
-        openAI = builder.AddAzureOpenAI(openAIName)
-            .AddDeployment(new AzureOpenAIDeployment(chatModelName, "gpt-35-turbo", "0613"))
-            .AddDeployment(new AzureOpenAIDeployment(textEmbeddingName, "text-embedding-3-small", "1"));
-    }
-
-    catalogApi
-        .WithReference(openAI)
-        .WithEnvironment("AI__OPENAI__EMBEDDINGNAME", textEmbeddingName);
-
-    webApp
-        .WithReference(openAI)
-        .WithEnvironment("AI__OPENAI__CHATMODEL", chatModelName); ;
+bool useOllama = false;
+if (useOllama)
+{
+    builder.AddOllama(catalogApi, webApp);
 }
 
 // Wire up the callback urls (self referencing)
