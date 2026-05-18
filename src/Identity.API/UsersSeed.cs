@@ -15,7 +15,7 @@ public class UsersSeed(ILogger<UsersSeed> logger, UserManager<ApplicationUser> u
                 Email = "AliceSmith@email.com",
                 EmailConfirmed = true,
                 CardHolderName = "Alice Smith",
-                CardNumber = "4012888888881881",
+                CardNumber = "XXXXXXXXXXXX1881",
                 CardType = 1,
                 City = "Redmond",
                 Country = "U.S.",
@@ -30,7 +30,7 @@ public class UsersSeed(ILogger<UsersSeed> logger, UserManager<ApplicationUser> u
                 SecurityNumber = "123"
             };
 
-            var result = userManager.CreateAsync(alice, "Pass123$").Result;
+            var result = await userManager.CreateAsync(alice, "Pass123$");
 
             if (!result.Succeeded)
             {
@@ -60,7 +60,7 @@ public class UsersSeed(ILogger<UsersSeed> logger, UserManager<ApplicationUser> u
                 Email = "BobSmith@email.com",
                 EmailConfirmed = true,
                 CardHolderName = "Bob Smith",
-                CardNumber = "4012888888881881",
+                CardNumber = "XXXXXXXXXXXX1881",
                 CardType = 1,
                 City = "Redmond",
                 Country = "U.S.",

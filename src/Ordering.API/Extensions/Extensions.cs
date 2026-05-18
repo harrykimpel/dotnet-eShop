@@ -1,4 +1,6 @@
-﻿internal static class Extensions
+﻿using FluentValidation;
+
+internal static class Extensions
 {
     public static void AddApplicationServices(this IHostApplicationBuilder builder)
     {
@@ -10,7 +12,11 @@
         // Pooling is disabled because of the following error:
         // Unhandled exception. System.InvalidOperationException:
         // The DbContext of type 'OrderingContext' cannot be pooled because it does not have a public constructor accepting a single parameter of type DbContextOptions or has more than one constructor.
-        builder.AddNpgsqlDbContext<OrderingContext>("OrderingDB", settings => settings.DbContextPooling = false);
+        services.AddDbContext<OrderingContext>(options =>
+        {
+            options.UseNpgsql(builder.Configuration.GetConnectionString("orderingdb"));
+        });
+        builder.EnrichNpgsqlDbContext<OrderingContext>();
 
         services.AddMigration<OrderingContext, OrderingContextSeed>();
 
@@ -19,7 +25,7 @@
 
         services.AddTransient<IOrderingIntegrationEventService, OrderingIntegrationEventService>();
 
-        builder.AddRabbitMqEventBus("EventBus")
+        builder.AddRabbitMqEventBus("eventbus")
                .AddEventBusSubscriptions();
 
         services.AddHttpContextAccessor();
@@ -36,10 +42,7 @@
         });
 
         // Register the command validators for the validator behavior (validators based on FluentValidation library)
-        services.AddSingleton<IValidator<CancelOrderCommand>, CancelOrderCommandValidator>();
-        services.AddSingleton<IValidator<CreateOrderCommand>, CreateOrderCommandValidator>();
-        services.AddSingleton<IValidator<IdentifiedCommand<CreateOrderCommand, bool>>, IdentifiedCommandValidator>();
-        services.AddSingleton<IValidator<ShipOrderCommand>, ShipOrderCommandValidator>();
+        services.AddValidatorsFromAssemblyContaining<CancelOrderCommandValidator>();
 
         services.AddScoped<IOrderQueries, OrderQueries>();
         services.AddScoped<IBuyerRepository, BuyerRepository>();

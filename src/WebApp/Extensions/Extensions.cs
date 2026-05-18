@@ -1,11 +1,12 @@
-﻿using eShop.WebApp;
+﻿using eShop.Basket.API.Grpc;
+using eShop.WebApp.Services.OrderStatus.IntegrationEvents;
 using eShop.WebAppComponents.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Components.Server;
+using Microsoft.Extensions.AI;
 using Microsoft.IdentityModel.JsonWebTokens;
-using Microsoft.SemanticKernel;
 
 public static class Extensions
 {
@@ -30,10 +31,12 @@ public static class Extensions
         builder.Services.AddGrpcClient<Basket.BasketClient>(o => o.Address = new("http://basket-api"))
             .AddAuthToken();
 
-        builder.Services.AddHttpClient<CatalogService>(o => o.BaseAddress = new("http://catalog-api"))
+        builder.Services.AddHttpClient<CatalogService>(o => o.BaseAddress = new("https+http://catalog-api"))
+            .AddApiVersion(2.0)
             .AddAuthToken();
 
-        builder.Services.AddHttpClient<OrderingService>(o => o.BaseAddress = new("http://ordering-api"))
+        builder.Services.AddHttpClient<OrderingService>(o => o.BaseAddress = new("https+http://ordering-api"))
+            .AddApiVersion(1.0)
             .AddAuthToken();
     }
 
@@ -90,19 +93,19 @@ public static class Extensions
 
     private static void AddAIServices(this IHostApplicationBuilder builder)
     {
-        var openAIOptions = builder.Configuration.GetSection("AI").Get<AIOptions>()?.OpenAI;
-        if (!string.IsNullOrWhiteSpace(openAIOptions?.ApiKey))
+        ChatClientBuilder? chatClientBuilder = null;
+        if (builder.Configuration["OllamaEnabled"] is string ollamaEnabled && bool.Parse(ollamaEnabled))
         {
-            var kernelBuilder = builder.Services.AddKernel();
-            if (!string.IsNullOrWhiteSpace(openAIOptions.Endpoint))
-            {
-                kernelBuilder.AddAzureOpenAIChatCompletion(openAIOptions.ChatModel, openAIOptions.Endpoint, openAIOptions.ApiKey);
-            }
-            else
-            {
-                kernelBuilder.AddOpenAIChatCompletion(openAIOptions.ChatModel, openAIOptions.ApiKey);
-            }
+            chatClientBuilder = builder.AddOllamaApiClient("chat")
+                .AddChatClient();
         }
+        else if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("chatModel")))
+        {
+            chatClientBuilder = builder.AddOpenAIClientFromConfiguration("chatModel")
+                .AddChatClient();
+        }
+
+        chatClientBuilder?.UseFunctionInvocation();
     }
 
     public static async Task<string?> GetBuyerIdAsync(this AuthenticationStateProvider authenticationStateProvider)

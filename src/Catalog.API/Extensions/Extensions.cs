@@ -4,7 +4,15 @@ public static class Extensions
 {
     public static void AddApplicationServices(this IHostApplicationBuilder builder)
     {
-        builder.AddNpgsqlDbContext<CatalogContext>("CatalogDB", configureDbContextOptions: dbContextOptionsBuilder =>
+        // Avoid loading full database config and migrations if startup
+        // is being invoked from build-time OpenAPI generation
+        if (builder.Environment.IsBuild())
+        {
+            builder.Services.AddDbContext<CatalogContext>();
+            return;
+        }
+
+        builder.AddNpgsqlDbContext<CatalogContext>("catalogdb", configureDbContextOptions: dbContextOptionsBuilder =>
         {
             dbContextOptionsBuilder.UseNpgsql(builder =>
             {
@@ -20,16 +28,24 @@ public static class Extensions
 
         builder.Services.AddTransient<ICatalogIntegrationEventService, CatalogIntegrationEventService>();
 
-        builder.AddRabbitMqEventBus("EventBus")
+        builder.AddRabbitMqEventBus("eventbus")
                .AddSubscription<OrderStatusChangedToAwaitingValidationIntegrationEvent, OrderStatusChangedToAwaitingValidationIntegrationEventHandler>()
                .AddSubscription<OrderStatusChangedToPaidIntegrationEvent, OrderStatusChangedToPaidIntegrationEventHandler>();
 
         builder.Services.AddOptions<CatalogOptions>()
             .BindConfiguration(nameof(CatalogOptions));
 
-        builder.Services.AddOptions<AIOptions>()
-            .BindConfiguration("AI");
+        if (builder.Configuration["OllamaEnabled"] is string ollamaEnabled && bool.Parse(ollamaEnabled))
+        {
+            builder.AddOllamaApiClient("embedding")
+                .AddEmbeddingGenerator();
+        }
+        else if (!string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("textEmbeddingModel")))
+        {
+            builder.AddOpenAIClientFromConfiguration("textEmbeddingModel")
+                .AddEmbeddingGenerator();
+        }
 
-        builder.Services.AddSingleton<ICatalogAI, CatalogAI>();
+        builder.Services.AddScoped<ICatalogAI, CatalogAI>();
     }
 }
