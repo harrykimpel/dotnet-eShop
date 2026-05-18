@@ -19,18 +19,6 @@ var webhooksDb = postgres.AddDatabase("webhooksdb");
 
 var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
 
-// OpenTelemetry
-var NEW_RELIC_REGION = Environment.GetEnvironmentVariable("NEW_RELIC_REGION");
-string OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.nr-data.net";
-if (NEW_RELIC_REGION != null &&
-    NEW_RELIC_REGION != "" &&
-    NEW_RELIC_REGION == "EU")
-{
-    OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.eu01.nr-data.net";
-}
-var NEW_RELIC_LICENSE_KEY = Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY");
-string OTEL_EXPORTER_OTLP_HEADERS = "api-key=" + NEW_RELIC_LICENSE_KEY;
-
 // Services
 var identityApi = builder.AddProject<Projects.Identity_API>("identity-api", launchProfileName)
     .WithExternalHttpEndpoints()
@@ -66,10 +54,7 @@ builder.AddProject<Projects.PaymentProcessor>("payment-processor")
 var webHooksApi = builder.AddProject<Projects.Webhooks_API>("webhooks-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WithReference(webhooksDb)
-    .WithEnvironment("Identity__Url", identityEndpoint)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "webhooks-api");
+    .WithEnvironment("Identity__Url", identityEndpoint);
 
 // Reverse proxies
 builder.AddYarp("mobile-bff")
@@ -79,10 +64,7 @@ builder.AddYarp("mobile-bff")
 // Apps
 var webhooksClient = builder.AddProject<Projects.WebhookClient>("webhooksclient", launchProfileName)
     .WithReference(webHooksApi)
-    .WithEnvironment("IdentityUrl", identityEndpoint)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
-    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "webhooksclient");
+    .WithEnvironment("IdentityUrl", identityEndpoint);
 
 var webApp = builder.AddProject<Projects.WebApp>("webapp", launchProfileName)
     .WithExternalHttpEndpoints()
