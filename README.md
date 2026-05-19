@@ -221,3 +221,52 @@ Defaults live in each service's `appsettings.json`:
 ```
 
 Set `DefaultModes` (e.g. `["slow"]`) to keep chaos active without a query parameter, and `Products` (e.g. `[1, 5, 9]`) to scope it to specific items — useful for staging demos.
+
+### Load generator
+
+A Playwright-based load generator drives demo traffic through real Chromium browsers, so the WebApp's Blazor SignalR connections, the New Relic browser agent, and the auth flow all exercise like a real user. Use it together with chaos to drive observable incidents in APM.
+
+The generator assumes Aspire is already running (it does **not** start it). Find the WebApp URL in the Aspire dashboard.
+
+```sh
+# 1) Start Aspire as usual.
+dotnet run --project src/eShop.AppHost/eShop.AppHost.csproj
+
+# 2) (Optional) Seed per-user logged-in storage states — one auth file per user under
+#    playwright/.auth/<user>.json. Each loadgen worker picks one by `workerIndex %
+#    USERS.length`, so APM traces show distinct `user.id`s. Skip this and the
+#    generator runs anonymous and skips /cart.
+USERS=alice,bob PASSWORD='Pass123$' npm run loadgen:auth
+
+# 3) Run the load generator (5 virtual users, 5 minutes by default).
+npm run loadgen
+```
+
+Tunable via env vars:
+
+- `BASE_URL` — defaults to `http://localhost:5045`.
+- `WORKERS` — number of parallel virtual users (= browsers). Default `5`.
+- `DURATION_S` — total run time per worker in seconds. Default `300`.
+- `THINK_MIN_MS` / `THINK_MAX_MS` — random pause between navigations. Defaults `1000` / `5000`.
+- `CHAOS=on` — randomly append `?chaos=…` to ~30% of requests, rotating across `slow`, `broken-images`, and `slow,broken-images`.
+- `CHAOS_PROBABILITY` — override that 0.3 ratio.
+- `PRODUCT_ID_MAX` — upper bound for product IDs visited (default `100`, matching the seed catalog).
+
+Examples:
+
+```sh
+# 10 users, 10 minutes, with chaos rotation
+WORKERS=10 DURATION_S=600 CHAOS=on npm run loadgen
+
+# Heavy chaos — 70% of requests carry a chaos param
+WORKERS=5 CHAOS=on CHAOS_PROBABILITY=0.7 npm run loadgen
+```
+
+Each browser session shows up as its own distributed trace in New Relic, with `user.id` and `product.id` already tagged on the spans you care about.
+
+For more user variety in APM, seed more users (any seeded Identity.API account works — `alice` and `bob` are the defaults, both with password `Pass123$`):
+
+```sh
+USERS=alice,bob PASSWORD='Pass123$' npm run loadgen:auth
+WORKERS=10 npm run loadgen   # workers rotate through alice/bob round-robin
+```

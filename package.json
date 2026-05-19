@@ -5,12 +5,15 @@
   "directories": {
     "test": "tests"
   },
-  "scripts": {},
+  "scripts": {
+    "loadgen": "playwright test --config=playwright.loadgen.config.ts --project=loadgen",
+    "loadgen:auth": "playwright test --config=playwright.loadgen.config.ts --project=setup"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "devDependencies": {
-    "@playwright/test": "^1.42.1",
+    "@playwright/test": "^1.60.0",
     "@types/node": "^20.11.25",
     "dotenv": "^16.4.5"
   }

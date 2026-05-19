@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using System.Diagnostics;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
@@ -180,6 +181,8 @@ public static class CatalogApi
             });
         }
 
+        Activity.Current?.SetTag("product.id", id);
+
         var item = await services.Context.CatalogItems.Include(ci => ci.CatalogBrand).SingleOrDefaultAsync(ci => ci.Id == id);
 
         if (item == null)
@@ -207,6 +210,8 @@ public static class CatalogApi
         IWebHostEnvironment environment,
         [Description("The catalog item id")] int id)
     {
+        Activity.Current?.SetTag("product.id", id);
+
         var item = await context.CatalogItems.FindAsync(id);
 
         if (item is null || item.PictureFileName is null)
@@ -318,6 +323,7 @@ public static class CatalogApi
                 Detail = "Item id must be provided in the request body."
             });
         }
+        Activity.Current?.SetTag("product.id", productToUpdate.Id);
         return await UpdateItem(httpContext, productToUpdate.Id, services, productToUpdate);
     }
 
@@ -327,6 +333,8 @@ public static class CatalogApi
         [AsParameters] CatalogServices services,
         CatalogItem productToUpdate)
     {
+        Activity.Current?.SetTag("product.id", id);
+
         var catalogItem = await services.Context.CatalogItems.SingleOrDefaultAsync(i => i.Id == id);
 
         if (catalogItem == null)
@@ -384,6 +392,8 @@ public static class CatalogApi
         services.Context.CatalogItems.Add(item);
         await services.Context.SaveChangesAsync();
 
+        Activity.Current?.SetTag("product.id", item.Id);
+
         return TypedResults.Created($"/api/catalog/items/{item.Id}");
     }
 
@@ -391,6 +401,8 @@ public static class CatalogApi
         [AsParameters] CatalogServices services,
         [Description("The id of the catalog item to delete")] int id)
     {
+        Activity.Current?.SetTag("product.id", id);
+
         var item = services.Context.CatalogItems.SingleOrDefault(x => x.Id == id);
 
         if (item is null)
