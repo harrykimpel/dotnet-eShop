@@ -20,20 +20,30 @@ var webhooksDb = postgres.AddDatabase("webhooksdb");
 var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
 
 var NEW_RELIC_REGION = Environment.GetEnvironmentVariable("NEW_RELIC_REGION");
-string OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.nr-data.net";
-if (NEW_RELIC_REGION != null &&
-    NEW_RELIC_REGION != "" &&
-    NEW_RELIC_REGION == "EU")
-{
-    OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.eu01.nr-data.net";
-}
 var NEW_RELIC_LICENSE_KEY = Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY");
-string OTEL_EXPORTER_OTLP_HEADERS = "api-key=" + NEW_RELIC_LICENSE_KEY;
+string? OTEL_EXPORTER_OTLP_ENDPOINT = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+string? OTEL_EXPORTER_OTLP_HEADERS = null;
+if (OTEL_EXPORTER_OTLP_ENDPOINT == null ||
+    OTEL_EXPORTER_OTLP_ENDPOINT.Length == 0)
+{
+    OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.nr-data.net";
+
+    if (NEW_RELIC_REGION != null &&
+        NEW_RELIC_REGION != "" &&
+        NEW_RELIC_REGION == "EU")
+    {
+        OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.eu01.nr-data.net";
+    }
+    OTEL_EXPORTER_OTLP_HEADERS = "api-key=" + NEW_RELIC_LICENSE_KEY;
+}
 
 // Services
 var identityApi = builder.AddProject<Projects.Identity_API>("identity-api", launchProfileName)
     .WithExternalHttpEndpoints()
     .WithReference(identityDb)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "identity-api")
     .WithHttpHealthCheck("/health");
 
 var identityEndpoint = identityApi.GetEndpoint(launchProfileName);
@@ -41,11 +51,11 @@ var identityEndpoint = identityApi.GetEndpoint(launchProfileName);
 var basketApi = builder.AddProject<Projects.Basket_API>("basket-api")
     .WithReference(redis)
     .WithReference(rabbitMq).WaitFor(rabbitMq)
-    .WithEnvironment("Identity__Url", identityEndpoint);
-redis.WithParentRelationship(basketApi)
+    .WithEnvironment("Identity__Url", identityEndpoint)
     .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
     .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
     .WithEnvironment("OTEL_SERVICE_NAME", "basket-api");
+redis.WithParentRelationship(basketApi);
 
 var catalogApi = builder.AddProject<Projects.Catalog_API>("catalog-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
@@ -66,6 +76,9 @@ var orderingApi = builder.AddProject<Projects.Ordering_API>("ordering-api")
 builder.AddProject<Projects.OrderProcessor>("order-processor")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WithReference(orderDb)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "order-processor")
     .WaitFor(orderingApi); // wait for the orderingApi to be ready because that contains the EF migrations
 
 builder.AddProject<Projects.PaymentProcessor>("payment-processor")
@@ -106,13 +119,16 @@ var webApp = builder.AddProject<Projects.WebApp>("webapp", launchProfileName)
     .WithReference(orderingApi)
     .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WaitFor(identityApi)
-    .WithEnvironment("IdentityUrl", identityEndpoint);
+    .WithEnvironment("IdentityUrl", identityEndpoint)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
+    .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
+    .WithEnvironment("OTEL_SERVICE_NAME", "webapp");
 
 // set to true if you want to use OpenAI
-bool useOpenAI = false;
+bool useOpenAI = true;
 if (useOpenAI)
 {
-    builder.AddOpenAI(catalogApi, webApp, OpenAITarget.OpenAI); // set to AzureOpenAI if you want to use Azure OpenAI
+    builder.AddOpenAI(catalogApi, webApp, OpenAITarget.AzureOpenAIExistingWithKey); // set to AzureOpenAI if you want to use Azure OpenAI
 }
 
 bool useOllama = false;
