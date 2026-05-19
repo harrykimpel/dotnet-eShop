@@ -35,7 +35,11 @@ redis.WithParentRelationship(basketApi);
 
 var catalogApi = builder.AddProject<Projects.Catalog_API>("catalog-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
-    .WithReference(catalogDb);
+    .WithReference(catalogDb)
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_METADATA", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_OUTPUT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_INPUT", "true");
 
 var orderingApi = builder.AddProject<Projects.Ordering_API>("ordering-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
@@ -74,13 +78,17 @@ var webApp = builder.AddProject<Projects.WebApp>("webapp", launchProfileName)
     .WithReference(orderingApi)
     .WithReference(rabbitMq).WaitFor(rabbitMq)
     .WaitFor(identityApi)
-    .WithEnvironment("IdentityUrl", identityEndpoint);
+    .WithEnvironment("IdentityUrl", identityEndpoint)
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_METADATA", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_OUTPUT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_INPUT", "true");
 
 // set to true if you want to use OpenAI
-bool useOpenAI = false;
+bool useOpenAI = true;
 if (useOpenAI)
 {
-    builder.AddOpenAI(catalogApi, webApp, OpenAITarget.OpenAI); // set to AzureOpenAI if you want to use Azure OpenAI
+    builder.AddOpenAI(catalogApi, webApp, OpenAITarget.AzureOpenAIExistingWithKey); // set to AzureOpenAI if you want to use Azure OpenAI
 }
 
 bool useOllama = false;
