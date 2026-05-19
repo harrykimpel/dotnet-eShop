@@ -3,6 +3,7 @@
 builder.AddServiceDefaults();
 builder.AddApplicationServices();
 builder.Services.AddProblemDetails();
+builder.Services.AddOptions<ChaosOptions>().BindConfiguration("Chaos");
 
 var withApiVersioning = builder.Services.AddApiVersioning(options =>
 {
@@ -15,6 +16,8 @@ builder.AddDefaultOpenApi(withApiVersioning);
 var app = builder.Build();
 
 app.MapDefaultEndpoints();
+
+app.UseMiddleware<ChaosMiddleware>();
 
 app.UseStatusCodePages();
 

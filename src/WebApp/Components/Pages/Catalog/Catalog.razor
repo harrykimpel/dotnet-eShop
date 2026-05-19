@@ -1,6 +1,8 @@
 ﻿@page "/"
 @inject NavigationManager Nav
 @inject CatalogService CatalogService
+@inject ChaosState Chaos
+@inject IOptionsMonitor<ChaosOptions> ChaosOptionsMonitor
 @attribute [StreamRendering]
 
 <PageTitle>AdventureWorks</PageTitle>
@@ -53,6 +55,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // The catalog list isn't a single-product view, so when chaos is product-scoped we skip the slow delay here.
+        if (Chaos.IsActive("slow") && Chaos.ProductIds.Count == 0)
+        {
+            await Task.Delay(ChaosOptionsMonitor.CurrentValue.SlowDelayMs);
+        }
+
         catalogResult = await CatalogService.GetCatalogItems(
             Page.GetValueOrDefault(1) - 1,
             PageSize,

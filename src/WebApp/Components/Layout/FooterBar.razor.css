@@ -24,6 +24,17 @@
   height: auto;
 }
 
+.chaos-badge {
+  margin-left: 1.25rem;
+  padding: 0.25rem 0.6rem;
+  background-color: #ff4d00;
+  color: white;
+  font-family: monospace;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+}
+
 
 @media only screen and (max-width: 480px) { 
   .eshop-footer-row {

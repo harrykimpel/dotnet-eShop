@@ -21,21 +21,16 @@ var launchProfileName = ShouldUseHttpForEndpoints() ? "http" : "https";
 
 var NEW_RELIC_REGION = Environment.GetEnvironmentVariable("NEW_RELIC_REGION");
 var NEW_RELIC_LICENSE_KEY = Environment.GetEnvironmentVariable("NEW_RELIC_LICENSE_KEY");
-string? OTEL_EXPORTER_OTLP_ENDPOINT = Environment.GetEnvironmentVariable("OTEL_EXPORTER_OTLP_ENDPOINT");
+string? OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.nr-data.net";
 string? OTEL_EXPORTER_OTLP_HEADERS = null;
-if (OTEL_EXPORTER_OTLP_ENDPOINT == null ||
-    OTEL_EXPORTER_OTLP_ENDPOINT.Length == 0)
-{
-    OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.nr-data.net";
 
-    if (NEW_RELIC_REGION != null &&
-        NEW_RELIC_REGION != "" &&
-        NEW_RELIC_REGION == "EU")
-    {
-        OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.eu01.nr-data.net";
-    }
-    OTEL_EXPORTER_OTLP_HEADERS = "api-key=" + NEW_RELIC_LICENSE_KEY;
+if (NEW_RELIC_REGION != null &&
+    NEW_RELIC_REGION != "" &&
+    NEW_RELIC_REGION == "EU")
+{
+    OTEL_EXPORTER_OTLP_ENDPOINT = "https://otlp.eu01.nr-data.net";
 }
+OTEL_EXPORTER_OTLP_HEADERS = "api-key=" + NEW_RELIC_LICENSE_KEY;
 
 // Services
 var identityApi = builder.AddProject<Projects.Identity_API>("identity-api", launchProfileName)
@@ -62,7 +57,11 @@ var catalogApi = builder.AddProject<Projects.Catalog_API>("catalog-api")
     .WithReference(catalogDb)
     .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
     .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "catalog-api");
+    .WithEnvironment("OTEL_SERVICE_NAME", "catalog-api")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_METADATA", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_OUTPUT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_INPUT", "true");
 
 var orderingApi = builder.AddProject<Projects.Ordering_API>("ordering-api")
     .WithReference(rabbitMq).WaitFor(rabbitMq)
@@ -122,7 +121,11 @@ var webApp = builder.AddProject<Projects.WebApp>("webapp", launchProfileName)
     .WithEnvironment("IdentityUrl", identityEndpoint)
     .WithEnvironment("OTEL_EXPORTER_OTLP_ENDPOINT", OTEL_EXPORTER_OTLP_ENDPOINT)
     .WithEnvironment("OTEL_EXPORTER_OTLP_HEADERS", OTEL_EXPORTER_OTLP_HEADERS)
-    .WithEnvironment("OTEL_SERVICE_NAME", "webapp");
+    .WithEnvironment("OTEL_SERVICE_NAME", "webapp")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_METADATA", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_OUTPUT", "true")
+    .WithEnvironment("OTEL_INSTRUMENTATION_GENAI_CAPTURE_TOOL_INPUT", "true");
 
 // set to true if you want to use OpenAI
 bool useOpenAI = true;

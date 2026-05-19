@@ -1,8 +1,20 @@
-﻿<footer class='eshop-footer'>
+@inject ChaosState Chaos
+
+<footer class='eshop-footer'>
   <div class='eshop-footer-content'>
     <div class='eshop-footer-row'>
       <img role="presentation" src='images/logo-footer.svg' class='logo logo-footer' />
       <p>© AdventureWorks</p>
+      @if (Chaos.ActiveModes.Count > 0)
+      {
+          <p class="chaos-badge" title="Append ?chaos=off to clear">
+              chaos: @string.Join(", ", Chaos.ActiveModes)
+              @if (Chaos.ProductIds.Count > 0)
+              {
+                  <span> · products: @string.Join(",", Chaos.ProductIds)</span>
+              }
+          </p>
+      }
     </div>
   </div>
 </footer>

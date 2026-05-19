@@ -71,10 +71,20 @@ public static partial class Extensions
                     tracing.SetSampler(new AlwaysOnSampler());
                 }
 
-                tracing.AddAspNetCoreInstrumentation()
+                tracing.AddAspNetCoreInstrumentation(options =>
+                    {
+                        options.EnrichWithHttpResponse = (activity, response) =>
+                        {
+                            var userId = UserContext.TryGetUserId(response.HttpContext);
+                            if (!string.IsNullOrEmpty(userId))
+                            {
+                                activity.SetTag(UserContext.UserIdAttribute, userId);
+                            }
+                        };
+                    })
                     .AddGrpcClientInstrumentation()
                     .AddHttpClientInstrumentation()
-                    .AddSource("Experimental.Microsoft.Extensions.AI");                    
+                    .AddSource("Experimental.Microsoft.Extensions.AI");
             });
 
         builder.AddOpenTelemetryExporters();

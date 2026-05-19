@@ -161,3 +161,63 @@ One way to look at the data is by using New Relic's service map:
 ... or by visualizing the distributed traces:
 
 ![New Relic distributed tracing](./img/newrelic-eshop-distributed-tracing.png)
+
+## Chaos engineering
+
+eShop ships with built-in synthetic failure modes you can trigger from the URL to drive observable incidents on demand — useful for demoing APM dashboards, alerts, and traces.
+
+Activations are logged with an `Activity` tag `chaos.modes` so they stand out in New Relic / Aspire traces. Modes are off by default; values are tunable via the `Chaos` section in `appsettings.json` for each service.
+
+### How to use
+
+Open the **WebApp** URL (find it in the Aspire dashboard — the `webapp` resource) and append a `chaos` query parameter. The selected modes stick via the `chaos-mode` cookie until you clear them with `?chaos=off`. Multiple modes are comma-separated. A small orange badge in the footer shows which modes are active.
+
+```text
+https://<webapp-host>/?chaos=slow,broken-images
+https://<webapp-host>/?chaos=off
+```
+
+### Frontend modes (WebApp)
+
+- `slow` — injects a 2.5s `Task.Delay` on Catalog, Item, and Cart pages; looks like Blazor server lag.
+- `broken-images` — product image URLs point to a 404 path; broken `<img>`s and 404s in the network tab.
+
+### Backend modes (Catalog.API)
+
+The WebApp automatically forwards active chaos modes to Catalog.API via an `X-Chaos-Mode` header, so a single URL on the frontend drives a full-stack incident. You can also hit Catalog.API directly with `?chaos=…` or the `X-Chaos-Mode` header.
+
+- `slow` — `Task.Delay` (default 2.5s) before the endpoint runs.
+- `flaky` — probabilistic 500 (default 25%) with problem JSON.
+- `memory` — allocates ~50 MB and holds it for the duration of the request; visible as GC pressure.
+
+### Scoping chaos to specific products
+
+By default chaos affects every product, page, and endpoint. To target only specific products, add `chaos-products` (comma-separated product IDs):
+
+```text
+https://<webapp-host>/?chaos=slow,broken-images&chaos-products=1,5,9
+```
+
+With a product scope set:
+
+- The catalog list and cart pages render normally (they aren't single-product views).
+- Only matching `ItemPage` requests slow-render; only matching products show broken images.
+- On Catalog.API, only `GET /api/catalog/items/{id}` and `/items/{id}/pic` for matching IDs get chaos; list endpoints are normal.
+
+The product scope is sticky via a `chaos-products` cookie and is forwarded to Catalog.API as `X-Chaos-Products`. Clear it with `?chaos-products=off` (or use `?chaos=off` to clear everything).
+
+### Configuration
+
+Defaults live in each service's `appsettings.json`:
+
+```json
+"Chaos": {
+  "SlowDelayMs": 2500,
+  "FlakyProbability": 0.25,
+  "MemoryAllocationMb": 50,
+  "DefaultModes": [],
+  "Products": []
+}
+```
+
+Set `DefaultModes` (e.g. `["slow"]`) to keep chaos active without a query parameter, and `Products` (e.g. `[1, 5, 9]`) to scope it to specific items — useful for staging demos.

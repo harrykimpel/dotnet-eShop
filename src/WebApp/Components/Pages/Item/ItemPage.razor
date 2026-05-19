@@ -4,6 +4,8 @@
 @inject BasketState BasketState
 @inject NavigationManager Nav
 @inject IProductImageUrlProvider ProductImages
+@inject ChaosState Chaos
+@inject IOptionsMonitor<ChaosOptions> ChaosOptionsMonitor
 
 @if (item is not null)
 {
@@ -76,6 +78,11 @@ else if (notFound)
     {
         try
         {
+            if (Chaos.IsActive("slow") && Chaos.IsProductInScope(ItemId))
+            {
+                await Task.Delay(ChaosOptionsMonitor.CurrentValue.SlowDelayMs);
+            }
+
             isLoggedIn = HttpContext?.User.Identity?.IsAuthenticated == true;
             item = await CatalogService.GetCatalogItem(ItemId);
             await UpdateNumInCartAsync();

@@ -19,12 +19,18 @@ public static class Extensions
 
         builder.Services.AddHttpForwarderWithServiceDiscovery();
 
+        // Chaos engineering
+        builder.Services.AddOptions<ChaosOptions>().BindConfiguration("Chaos");
+        builder.Services.AddHttpContextAccessor();
+        builder.Services.AddScoped<ChaosState>();
+        builder.Services.AddTransient<ChaosForwardingHandler>();
+
         // Application services
         builder.Services.AddScoped<BasketState>();
         builder.Services.AddScoped<LogOutService>();
         builder.Services.AddSingleton<BasketService>();
         builder.Services.AddSingleton<OrderStatusNotificationService>();
-        builder.Services.AddSingleton<IProductImageUrlProvider, ProductImageUrlProvider>();
+        builder.Services.AddScoped<IProductImageUrlProvider, ProductImageUrlProvider>();
         builder.AddAIServices();
 
         // HTTP and GRPC client registrations
@@ -33,7 +39,8 @@ public static class Extensions
 
         builder.Services.AddHttpClient<CatalogService>(o => o.BaseAddress = new("https+http://catalog-api"))
             .AddApiVersion(2.0)
-            .AddAuthToken();
+            .AddAuthToken()
+            .AddHttpMessageHandler<ChaosForwardingHandler>();
 
         builder.Services.AddHttpClient<OrderingService>(o => o.BaseAddress = new("https+http://ordering-api"))
             .AddApiVersion(1.0)
