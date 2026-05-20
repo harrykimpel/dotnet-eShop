@@ -18,6 +18,29 @@ function discoverAuthFiles(): string[] {
 
 const AUTH_FILES = discoverAuthFiles();
 
+// One test per virtual user — Playwright workers parallelize *across tests*, not within a single
+// test, so a lone `test()` would leave WORKERS-1 workers idle.
+const VU_COUNT = parseInt(process.env.WORKERS || '5', 10);
+
+// Fraction of virtual users that browse anonymously (no storageState). Distributed
+// deterministically across vu indices so the split is predictable per run.
+const ANONYMOUS_RATIO = Math.min(1, Math.max(0, parseFloat(process.env.ANONYMOUS_RATIO || '0')));
+
+function pickStorageState(vu: number): string | undefined {
+  if (AUTH_FILES.length === 0) return undefined;
+  if (ANONYMOUS_RATIO > 0) {
+    // Every `stride`-th vu is anonymous (vu 0, stride, 2*stride, …).
+    const stride = Math.max(1, Math.round(1 / ANONYMOUS_RATIO));
+    if (vu % stride === 0) return undefined;
+  }
+  // Round-robin across seeded users, ignoring anonymous slots so each authed user
+  // still gets roughly equal share.
+  const authedIndex = ANONYMOUS_RATIO > 0
+    ? vu - Math.floor(vu / Math.max(1, Math.round(1 / ANONYMOUS_RATIO))) - 1
+    : vu;
+  return AUTH_FILES[((authedIndex % AUTH_FILES.length) + AUTH_FILES.length) % AUTH_FILES.length];
+}
+
 const DURATION_S = parseInt(process.env.DURATION_S || '300', 10);
 const THINK_MIN_MS = parseInt(process.env.THINK_MIN_MS || '1000', 10);
 const THINK_MAX_MS = parseInt(process.env.THINK_MAX_MS || '5000', 10);
@@ -71,40 +94,42 @@ function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-test('virtual user', async ({ browser }) => {
-  const workerId = test.info().workerIndex;
-  const storageState = AUTH_FILES.length > 0 ? AUTH_FILES[workerId % AUTH_FILES.length] : undefined;
+for (let vu = 0; vu < VU_COUNT; vu++) {
+  const storageState = pickStorageState(vu);
   const userLabel = storageState ? path.basename(storageState, '.json') : 'anonymous';
-  const isLoggedIn = !!storageState;
 
-  const context = await browser.newContext(storageState ? { storageState } : {});
-  const page = await context.newPage();
+  test(`virtual user ${vu} (${userLabel})`, async ({ browser }) => {
+    const isLoggedIn = !!storageState;
 
-  const endTime = Date.now() + DURATION_S * 1000;
-  let nav = 0;
-  let failures = 0;
+    const context = await browser.newContext(storageState ? { storageState } : {});
+    const page = await context.newPage();
 
-  console.log(`[vu ${workerId}/${userLabel}] starting (logged-in=${isLoggedIn}, duration=${DURATION_S}s, chaos=${CHAOS})`);
+    const endTime = Date.now() + DURATION_S * 1000;
+    let nav = 0;
+    let failures = 0;
 
-  try {
-    while (Date.now() < endTime) {
-      const url = buildUrl(isLoggedIn);
-      const start = Date.now();
-      nav++;
-      try {
-        await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-        const ms = Date.now() - start;
-        console.log(`[vu ${workerId}/${userLabel}] #${nav} ${url} → ${ms}ms`);
-      } catch (err) {
-        failures++;
-        const ms = Date.now() - start;
-        console.log(`[vu ${workerId}/${userLabel}] #${nav} ${url} → FAIL ${ms}ms: ${(err as Error).message.split('\n')[0]}`);
+    console.log(`[vu ${vu}/${userLabel}] starting (logged-in=${isLoggedIn}, duration=${DURATION_S}s, chaos=${CHAOS})`);
+
+    try {
+      while (Date.now() < endTime) {
+        const url = buildUrl(isLoggedIn);
+        const start = Date.now();
+        nav++;
+        try {
+          await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+          const ms = Date.now() - start;
+          console.log(`[vu ${vu}/${userLabel}] #${nav} ${url} → ${ms}ms`);
+        } catch (err) {
+          failures++;
+          const ms = Date.now() - start;
+          console.log(`[vu ${vu}/${userLabel}] #${nav} ${url} → FAIL ${ms}ms: ${(err as Error).message.split('\n')[0]}`);
+        }
+        await sleep(randInt(THINK_MIN_MS, THINK_MAX_MS));
       }
-      await sleep(randInt(THINK_MIN_MS, THINK_MAX_MS));
+    } finally {
+      await context.close();
     }
-  } finally {
-    await context.close();
-  }
 
-  console.log(`[vu ${workerId}/${userLabel}] done — ${nav} navigations, ${failures} failures`);
-});
+    console.log(`[vu ${vu}/${userLabel}] done — ${nav} navigations, ${failures} failures`);
+  });
+}

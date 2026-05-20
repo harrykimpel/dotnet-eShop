@@ -251,18 +251,27 @@ Tunable via env vars:
 - `CHAOS=on` — randomly append `?chaos=…` to ~30% of requests, rotating across `slow`, `broken-images`, and `slow,broken-images`.
 - `CHAOS_PROBABILITY` — override that 0.3 ratio.
 - `PRODUCT_ID_MAX` — upper bound for product IDs visited (default `100`, matching the seed catalog).
+- `ANONYMOUS_RATIO` — fraction of virtual users that browse without login (default `0`). E.g. `0.2` with `WORKERS=10` makes 2 vus anonymous and 8 split across the seeded users. Anonymous vus skip `/cart`.
+
+The two axes compose cleanly: `ANONYMOUS_RATIO` controls **who** the virtual users are (per-vu, fixed for that vu's whole run), and `CHAOS=on` controls **what** they hit (per-request, sampled). Use them together to drive a realistic mix.
 
 Examples:
 
 ```sh
-# 10 users, 10 minutes, with chaos rotation
+# 10 users, 10 minutes, with chaos rotation (all authenticated, alternating alice/bob)
 WORKERS=10 DURATION_S=600 CHAOS=on npm run loadgen
 
 # Heavy chaos — 70% of requests carry a chaos param
 WORKERS=5 CHAOS=on CHAOS_PROBABILITY=0.7 npm run loadgen
+
+# Realistic mix: 8 logged-in vus (alice/bob) + 2 anonymous + chaos rotation
+WORKERS=10 ANONYMOUS_RATIO=0.2 CHAOS=on npm run loadgen
+
+# Pure anonymous load (no auth seeding required)
+WORKERS=5 ANONYMOUS_RATIO=1 CHAOS=on npm run loadgen
 ```
 
-Each browser session shows up as its own distributed trace in New Relic, with `user.id` and `product.id` already tagged on the spans you care about.
+Each browser session shows up as its own distributed trace in New Relic, with `user.id` and `product.id` already tagged on the spans you care about. Anonymous virtual users produce traces with no `user.id` tag — useful for slicing dashboards by logged-in vs guest traffic.
 
 For more user variety in APM, seed more users (any seeded Identity.API account works — `alice` and `bob` are the defaults, both with password `Pass123$`):
 
